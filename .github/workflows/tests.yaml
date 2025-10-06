@@ -72,9 +72,9 @@ jobs:
           AWS_ACCOUNT_ID: ${{ steps.sts_id.outputs.account }}
 
           # ensure Terratest/terraform subprocesses see the OIDC creds
-          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
+          # AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          # AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          # AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
         run: |
           go mod download
           gotestsum --junitfile test-report.xml -- \
