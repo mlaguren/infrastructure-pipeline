@@ -5,9 +5,10 @@ The `modules/` directory contains **reusable Infrastructure-as-Code (IaC)** comp
 Each module encapsulates a specific piece of infrastructure — such as IAM roles, S3 buckets, VPCs, or databases — and defines its own inputs, outputs, and resources.  
 Modules are versioned, documented, and can be composed together within environment definitions under the `envs/` directory.
 
+```
 modules/
 ├── iam/ # IAM roles, policies, and OIDC trust relationships
-
+```
 
 Each subfolder represents a standalone OpenTofu module.  
 Modules can be combined to build complete environments in the `envs/` directory (e.g., `envs/dev/main.tf`).
@@ -37,19 +38,20 @@ module "iam_developer_role" {
   github_repos  = ["monorepo", "infra"]
   secrets_prefix = "fabrion/dev/"
 }
-
+```
 Testing
 
 Each module should include a matching test file under the tests/ directory using Terratest:
 
-tests/
+```tests/
 └── iam_test.go
-
+```
 
 You can run all module tests with:
 
+```bash
 gotestsum --format testname -- -v -timeout 30m ./tests
-
+```
 # Best Practices
 
 * Always include README.md, variables.tf, outputs.tf, and main.tf in each module.
