@@ -50,6 +50,7 @@ You’ll also need:
 - (Optional) GitHub OIDC Role configured for CI/CD deployments
 
 ---
+## Setting Up Github OIDC
 
 ## ⚙️ Local Development Workflow
 
