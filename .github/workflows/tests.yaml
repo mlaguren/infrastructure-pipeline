@@ -65,6 +65,7 @@ jobs:
           echo "account=$ACCOUNT_ID" >> "$GITHUB_OUTPUT"
 
       - name: Run Terratest (IAM Developer Role)
+        if: ${{ hashFiles('tests/**') != '' }}
         working-directory: tests
         env:
           # required by your test file
