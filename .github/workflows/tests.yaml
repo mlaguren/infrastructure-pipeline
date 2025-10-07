@@ -21,23 +21,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_CI_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: gha-iam-terratest
-          role-duration-seconds: 3600
-
-      # Sanity check: fail fast if creds are not present
-      - name: Who am I? (STS)
-        run: aws sts get-caller-identity
-
-      - name: Setup OpenTofu
-        uses: opentofu/setup-opentofu@v1
-        with:
-          tofu_version: v1.7.3
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -55,7 +38,26 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@latest
+        run: |
+          go install gotest.tools/gotestsum@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_CI_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-iam-terratest
+          role-duration-seconds: 3600
+
+      # Sanity check: fail fast if creds are not present
+      - name: Who am I? (STS)
+        run: aws sts get-caller-identity
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: v1.7.3
 
       - name: Resolve AWS Account ID (for test env)
         id: sts_id
@@ -67,29 +69,26 @@ jobs:
       # Run only if there are Go test files under tests/
       - name: Run Terratest (IAM Developer Role)
         if: ${{ hashFiles('tests/**/*.go') != '' }}
+        working-directory: tests
         env:
           AWS_REGION: ${{ env.AWS_REGION }}
           AWS_ACCOUNT_ID: ${{ steps.sts_id.outputs.account }}
         run: |
           set -euo pipefail
-          REPORT=tests/test-report.xml
-          OUTPUT=tests/output.txt
+          REPORT=test-report.xml
+          OUTPUT=output.txt
 
-          if [ -f tests/go.mod ]; then
+          if [ -f go.mod ]; then
             echo "Using module in tests/"
-            pushd tests >/dev/null
             go mod download
-            PKG="./..."
-            gotestsum --junitfile "$(basename "$REPORT")" -- \
-              go test -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$(basename "$OUTPUT")"
-            popd >/dev/null
-          elif [ -f go.mod ]; then
+            PKG=./...
+            # keep this on ONE line to avoid gotestsum parsing 'go' and 'test' as package names:
+            gotestsum --junitfile "$REPORT" -- go test -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$OUTPUT"
+          elif [ -f ../go.mod ]; then
             echo "Using root module, targeting ./tests/..."
-            go mod download
-            PKG="./tests/..."
-            mkdir -p tests
-            gotestsum --junitfile "$REPORT" -- \
-              go test -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$OUTPUT"
+            (cd .. && go mod download)
+            PKG=./tests/...
+            gotestsum --junitfile "$REPORT" -- go test -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$OUTPUT"
           else
             echo "No go.mod found in tests/ or repo root — skipping Terratest."
             exit 0
