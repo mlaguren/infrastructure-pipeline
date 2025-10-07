@@ -53,12 +53,10 @@ module "iam_developer_role" {
   }
 
   github_oidc_provider_arn = var.github_oidc_provider_arn
-  github_repo_sub_patterns = var.github_repo_sub_patterns
-
-  # Allow your local user AND (optionally) the CI role to assume dev-role
+  github_repo_sub_patterns      = var.github_repo_sub_patterns
   additional_trusted_principals = compact([
     "arn:aws:iam::252371519482:user/melvin.laguren@fabrion.com",
-    var.ci_role_arn, # null locally? compact() drops it; in CI it’s present.
+    var.ci_role_arn,
   ])
 }
 

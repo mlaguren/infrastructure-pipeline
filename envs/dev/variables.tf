@@ -10,7 +10,7 @@ variable "github_oidc_provider_arn" {
 
 variable "github_repo_sub_patterns" {
   type    = list(string)
-  default = ["repo:mlaguren/*:*"] # tighten per repo/branch/tag as needed
+  default = ["repo:mlaguren/infrastructure-pipeline:*"] # tighten per repo/branch/tag as needed
 }
 
 variable "ci_role_arn" {
