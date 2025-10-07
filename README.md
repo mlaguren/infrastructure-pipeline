@@ -52,6 +52,8 @@ You’ll also need:
 ---
 ## Setting Up Github OIDC
 
+See [OpenID-Connect Overview Page](https://github.com/mlaguren/infrastructure-pipeline/wiki/OpenID-Connect-(OIDC)-Overview)
+
 ## ⚙️ Local Development Workflow
 
 ### 1️⃣ Initialize
