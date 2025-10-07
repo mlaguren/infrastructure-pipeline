@@ -50,7 +50,6 @@ jobs:
           role-session-name: gha-iam-terratest
           role-duration-seconds: 3600
 
-      # Sanity check: fail fast if creds are not present
       - name: Who am I? (STS)
         run: aws sts get-caller-identity
 
@@ -82,13 +81,13 @@ jobs:
             echo "Using module in tests/"
             go mod download
             PKG=./...
-            # keep this on ONE line to avoid gotestsum parsing 'go' and 'test' as package names:
-            gotestsum --junitfile "$REPORT" -- go test -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$OUTPUT"
+            # IMPORTANT: pass ONLY go test FLAGS/PACKAGES after `--` (no literal `go test`)
+            gotestsum --junitfile "$REPORT" -- -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$OUTPUT"
           elif [ -f ../go.mod ]; then
             echo "Using root module, targeting ./tests/..."
             (cd .. && go mod download)
             PKG=./tests/...
-            gotestsum --junitfile "$REPORT" -- go test -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$OUTPUT"
+            gotestsum --junitfile "$REPORT" -- -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$OUTPUT"
           else
             echo "No go.mod found in tests/ or repo root — skipping Terratest."
             exit 0
