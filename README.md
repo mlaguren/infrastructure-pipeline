@@ -1,4 +1,6 @@
 # OpenTofu Infrastructure Setup
+[![Lint](https://github.com/mlaguren/infrastructure-pipeline/actions/workflows/lint.yaml/badge.svg)](https://github.com/mlaguren/infrastructure-pipeline/actions/workflows/lint.yaml)
+[![Tests](https://github.com/mlaguren/infrastructure-pipeline/actions/workflows/tests.yaml/badge.svg)](https://github.com/mlaguren/infrastructure-pipeline/actions/workflows/tests.yaml)
 
 <p>This repository defines **Infrastructure-as-Code (IaC)** for provisioning and managing AWS resources using [OpenTofu](https://opentofu.org).  </p>
 It establishes a **modular, reusable, and testable** foundation for cloud environments — from IAM roles to databases, networking, secrets management, etc.

@@ -38,13 +38,12 @@ data "aws_iam_policy_document" "baseline_readonly" {
   }
 }
 
+# envs/dev/main.tf
 module "iam_developer_role" {
   source = "../../modules/iam-developer-role"
 
-  role_name   = "dev-role"
-  description = "Reusable Developer Role (least-priv baseline, extensible)"
-
-  # ⚠️ For the test run, skip boundary or use a permissive test boundary
+  role_name                = "dev-role"
+  description              = "Reusable Developer Role (least-priv baseline, extensible)"
   permissions_boundary_arn = null
 
   tags = {
@@ -56,12 +55,11 @@ module "iam_developer_role" {
   github_oidc_provider_arn = var.github_oidc_provider_arn
   github_repo_sub_patterns = var.github_repo_sub_patterns
 
-  # ✅ Allow your local user (or a role/group you use locally) to assume the role in tests
-  additional_trusted_principals = [
-    "arn:aws:iam::252371519482:user/melvin.laguren@fabrion.com"
-  ]
-
-  # If your module outputs role_arn, you can reference it below for the user policy
+  # Allow your local user AND (optionally) the CI role to assume dev-role
+  additional_trusted_principals = compact([
+    "arn:aws:iam::252371519482:user/melvin.laguren@fabrion.com",
+    var.ci_role_arn, # null locally? compact() drops it; in CI it’s present.
+  ])
 }
 
 # If your module outputs role_arn, use it directly. Otherwise hardcode the ARN.

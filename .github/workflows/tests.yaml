@@ -1,4 +1,4 @@
-name: Terratest (IAM Developer Role)
+name: Terratest
 
 on:
   pull_request:
