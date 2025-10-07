@@ -64,23 +64,39 @@ jobs:
           echo "AWS_ACCOUNT_ID=$ACCOUNT_ID" >> "$GITHUB_ENV"
           echo "account=$ACCOUNT_ID" >> "$GITHUB_OUTPUT"
 
+      # Run only if there are Go test files under tests/
       - name: Run Terratest (IAM Developer Role)
-        working-directory: tests
+        if: ${{ hashFiles('tests/**/*.go') != '' }}
         env:
-          # required by your test file
           AWS_REGION: ${{ env.AWS_REGION }}
           AWS_ACCOUNT_ID: ${{ steps.sts_id.outputs.account }}
-
-          # ensure Terratest/terraform subprocesses see the OIDC creds
-          # AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
-          # AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          # AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
         run: |
-          go mod download
-          gotestsum --junitfile test-report.xml -- \
-            go test -run TestIamDeveloperRole -v -timeout 30m ./... | tee output.txt
+          set -euo pipefail
+          REPORT=tests/test-report.xml
+          OUTPUT=tests/output.txt
+
+          if [ -f tests/go.mod ]; then
+            echo "Using module in tests/"
+            pushd tests >/dev/null
+            go mod download
+            PKG="./..."
+            gotestsum --junitfile "$(basename "$REPORT")" -- \
+              go test -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$(basename "$OUTPUT")"
+            popd >/dev/null
+          elif [ -f go.mod ]; then
+            echo "Using root module, targeting ./tests/..."
+            go mod download
+            PKG="./tests/..."
+            mkdir -p tests
+            gotestsum --junitfile "$REPORT" -- \
+              go test -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$OUTPUT"
+          else
+            echo "No go.mod found in tests/ or repo root — skipping Terratest."
+            exit 0
+          fi
 
       - name: Upload test report (JUnit)
+        if: ${{ hashFiles('tests/test-report.xml') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: junit-terratest
@@ -88,6 +104,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload raw test output
+        if: ${{ hashFiles('tests/output.txt') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: terratest-output
