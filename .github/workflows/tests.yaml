@@ -1,4 +1,4 @@
-name: Terratest (IAM Developer Role)
+name: Terratest
 
 on:
   pull_request:
@@ -7,10 +7,16 @@ on:
 permissions:
   id-token: write
   contents: read
+  actions: read
+  checks: write
 
 env:
+  GOTOOLCHAIN: local
   AWS_REGION: us-east-1
-
+  # Terraform/OpenTofu auto-picks these as variables: var.ci_role_arn, var.github_repo_sub_patterns
+  TF_VAR_ci_role_arn: ${{ secrets.AWS_CI_ROLE_TO_ASSUME }}
+  TF_VAR_github_repo_sub_patterns: '["repo:mlaguren/infrastructure-pipeline:*"]'
+  TF_VAR_github_oidc_provider_arn: arn:aws:iam::252371519482:oidc-provider/token.actions.githubusercontent.com
 jobs:
   terratest-iam:
     # Prevent running on forked PRs (no repo secrets there)
@@ -21,28 +27,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_CI_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: gha-iam-terratest
-          role-duration-seconds: 3600
-
-      # Sanity check: fail fast if creds are not present
-      - name: Who am I? (STS)
-        run: aws sts get-caller-identity
-
-      - name: Setup OpenTofu
-        uses: opentofu/setup-opentofu@v1
-        with:
-          tofu_version: v1.7.3
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.25.x'
           check-latest: true
+          cache: true 
 
       - name: Cache Go build
         uses: actions/cache@v4
@@ -55,7 +45,37 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@latest
+        run: |
+          go install gotest.tools/gotestsum@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_CI_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-iam-terratest
+          role-duration-seconds: 3600
+
+      - name: Who am I? (STS)
+        run: aws sts get-caller-identity
+
+      # Quick sanity: ensure the OIDC sub matches our trust pattern
+      - name: Debug OIDC sub
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y >/dev/null && sudo apt-get install -y jq >/dev/null
+          TOKEN="$(curl -sS "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" | jq -r .value)"
+          echo "$TOKEN" | cut -d'.' -f2 | base64 -d 2>/dev/null | jq -r .sub
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: v1.7.3
 
       - name: Resolve AWS Account ID (for test env)
         id: sts_id
@@ -64,36 +84,49 @@ jobs:
           echo "AWS_ACCOUNT_ID=$ACCOUNT_ID" >> "$GITHUB_ENV"
           echo "account=$ACCOUNT_ID" >> "$GITHUB_OUTPUT"
 
+      # Optional: init envs/dev so TF_VAR_* are visible to tofu if tests call it
+      - name: OpenTofu init (dev)
+        working-directory: envs/dev
+        run: |
+          tofu init -input=false
+
       # Run only if there are Go test files under tests/
       - name: Run Terratest (IAM Developer Role)
         if: ${{ hashFiles('tests/**/*.go') != '' }}
+        working-directory: tests
         env:
           AWS_REGION: ${{ env.AWS_REGION }}
           AWS_ACCOUNT_ID: ${{ steps.sts_id.outputs.account }}
+          # Ensure tests (or any tofu calls they make) see these vars too
+          TF_VAR_ci_role_arn: ${{ env.TF_VAR_ci_role_arn }}
+          TF_VAR_github_repo_sub_patterns: ${{ env.TF_VAR_github_repo_sub_patterns }}
         run: |
           set -euo pipefail
-          REPORT=tests/test-report.xml
-          OUTPUT=tests/output.txt
+          REPORT=test-report.xml
+          OUTPUT=output.txt
 
-          if [ -f tests/go.mod ]; then
+          if [ -f go.mod ]; then
             echo "Using module in tests/"
-            pushd tests >/dev/null
             go mod download
-            PKG="./..."
-            gotestsum --junitfile "$(basename "$REPORT")" -- \
-              go test -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$(basename "$OUTPUT")"
-            popd >/dev/null
-          elif [ -f go.mod ]; then
+            PKG=./...
+            gotestsum --junitfile "$REPORT" -- -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$OUTPUT"
+          elif [ -f ../go.mod ]; then
             echo "Using root module, targeting ./tests/..."
-            go mod download
-            PKG="./tests/..."
-            mkdir -p tests
-            gotestsum --junitfile "$REPORT" -- \
-              go test -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$OUTPUT"
+            (cd .. && go mod download)
+            PKG=./tests/...
+            gotestsum --junitfile "$REPORT" -- -run TestIamDeveloperRole -v -timeout 30m "$PKG" | tee "$OUTPUT"
           else
             echo "No go.mod found in tests/ or repo root — skipping Terratest."
             exit 0
           fi
+
+      - name: Test Report
+        uses: dorny/test-reporter@v2
+        if: ${{ !cancelled() }}
+        with:
+          name: Go Terratest (IAM)
+          path: tests/test-report.xml
+          reporter: java-junit
 
       - name: Upload test report (JUnit)
         if: ${{ hashFiles('tests/test-report.xml') != '' }}
