@@ -11,6 +11,7 @@ permissions:
   checks: write
 
 env:
+  GOTOOLCHAIN: local
   AWS_REGION: us-east-1
   # Terraform/OpenTofu auto-picks these as variables: var.ci_role_arn, var.github_repo_sub_patterns
   TF_VAR_ci_role_arn: ${{ secrets.AWS_CI_ROLE_TO_ASSUME }}
@@ -29,8 +30,9 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.25.x'
           check-latest: true
+          cache: true 
 
       - name: Cache Go build
         uses: actions/cache@v4
